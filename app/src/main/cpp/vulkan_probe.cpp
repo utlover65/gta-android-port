@@ -1,49 +1,3 @@
-#include <jni.h>
-#include <vulkan/vulkan.h>
-#include <sstream>
-#include <string>
-#include <vector>
-
-static std::string ver(uint32_t v) {
-    std::ostringstream s; s << VK_VERSION_MAJOR(v) << "." << VK_VERSION_MINOR(v) << "." << VK_VERSION_PATCH(v);
-    return s.str();
-}
-static bool ext(const std::vector<VkExtensionProperties>& xs, const char* name) {
-    for (const auto& x : xs) if (std::string(x.extensionName) == name) return true;
-    return false;
-}
-extern "C" JNIEXPORT jstring JNICALL
-Java_org_utlover65_astravulkanprobe_MainActivity_getVulkanReport(JNIEnv* env, jclass) {
-    std::ostringstream o;
-    o << "ASTRA VULKAN PROBE\n=================\n";
-    uint32_t loader = VK_API_VERSION_1_0;
-    auto getVer = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
-        vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
-    if (getVer && getVer(&loader) != VK_SUCCESS) loader = VK_API_VERSION_1_0;
-    o << "Loader API: " << ver(loader) << "\n";
-        // VK_KHR_android_surface is an instance extension, not a device extension.
-    uint32_t instanceExtCount = 0;
-    VkResult instanceExtResult =
-        vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtCount, nullptr);
-
-    std::vector<VkExtensionProperties> instanceExts;
-    if (instanceExtResult == VK_SUCCESS && instanceExtCount > 0) {
-        instanceExts.resize(instanceExtCount);
-        instanceExtResult = vkEnumerateInstanceExtensionProperties(
-            nullptr, &instanceExtCount, instanceExts.data());
-        if (instanceExtResult != VK_SUCCESS) instanceExts.clear();
-    }
-
-    o << "Instance extensions: android_surface="
-      << ext(instanceExts, "VK_KHR_android_surface") << "\n";
-    VkApplicationInfo ai{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-    ai.pApplicationName = "Astra Vulkan Probe"; ai.apiVersion = loader < VK_API_VERSION_1_1 ? loader : VK_API_VERSION_1_1;
-    VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO}; ci.pApplicationInfo = &ai;
-    VkInstance instance = VK_NULL_HANDLE;
-    VkResult r = vkCreateInstance(&ci, nullptr, &instance);
-    if (r != VK_SUCCESS) {
-        o << "vkCreateInstance FAILED: " << static_cast<int>(r) << "\n";
-        return env->NewStringUTF(o.str().c_str());
 
 #include <jni.h>
 #include <vulkan/vulkan.h>
@@ -305,4 +259,3 @@ Java_org_utlover65_astravulkanprobe_MainActivity_getVulkanReport(
 
     return env->NewStringUTF(o.str().c_str());
 }
-
