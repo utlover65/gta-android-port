@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   build-dawn:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
       - name: Checkout project
@@ -25,33 +25,79 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install host build tools
+        shell: bash
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            protobuf-compiler \
+            pkg-config
+
+          protoc --version
+          command -v protoc
+
       - name: Install Android NDK and CMake
         shell: bash
         run: |
+          set -eux
+
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "Android sdkmanager not found: $SDKMANAGER"
+            exit 1
+          fi
+
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          set -o pipefail
+
+          "$SDKMANAGER" \
             "ndk;27.2.12479018" \
             "cmake;3.22.1"
 
+          test -d "$SDK/ndk/27.2.12479018"
+
       - name: Checkout Dawn
+        shell: bash
         run: |
+          set -eux
           git clone --depth 1 \
             https://github.com/google/dawn.git \
             dawn-source
 
+          git -C dawn-source rev-parse --short HEAD
+
       - name: Configure Dawn for Android ARM64
         shell: bash
         run: |
+          set -eux
+
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           NDK="$SDK/ndk/27.2.12479018"
+          PROTOC="$(command -v protoc)"
 
-          cmake -S dawn-source -B dawn-build \
+          test -f "$NDK/build/cmake/android.toolchain.cmake"
+          test -x "$PROTOC"
+
+          echo "Host protoc: $PROTOC"
+          "$PROTOC" --version
+
+          cmake \
+            -S dawn-source \
+            -B dawn-build \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=26 \
+            -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DPROTOC_EXECUTABLE="$PROTOC" \
             -DDAWN_FETCH_DEPENDENCIES=ON \
             -DDAWN_ENABLE_INSTALL=ON \
             -DDAWN_ENABLE_VULKAN=ON \
@@ -66,7 +112,31 @@ jobs:
             -DTINT_BUILD_CMD_TOOLS=OFF
 
       - name: Build Dawn WebGPU library
+        shell: bash
         run: |
+          set -eux
           cmake --build dawn-build \
             --target webgpu_dawn \
             --parallel 2
+
+      - name: Report generated libraries
+        shell: bash
+        run: |
+          set -eux
+
+          find dawn-build \
+            -type f \
+            \( -name 'libwebgpu_dawn.so' \
+            -o -name 'libwebgpu_dawn.a' \) \
+            -print
+
+      - name: Upload Dawn build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: dawn-android-arm64-build
+          path: |
+            dawn-build/**/*.so
+            dawn-build/**/*.a
+            dawn-build/**/*.h
+          if-no-files-found: warn
+          retention-days: 7
