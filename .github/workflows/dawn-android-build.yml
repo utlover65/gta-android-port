@@ -1,0 +1,72 @@
+name: Build Dawn for Android ARM64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - ".github/workflows/dawn-android-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-dawn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK and CMake
+        shell: bash
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+
+      - name: Checkout Dawn
+        run: |
+          git clone --depth 1 \
+            https://github.com/google/dawn.git \
+            dawn-source
+
+      - name: Configure Dawn for Android ARM64
+        shell: bash
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          NDK="$SDK/ndk/27.2.12479018"
+
+          cmake -S dawn-source -B dawn-build \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=26 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDAWN_FETCH_DEPENDENCIES=ON \
+            -DDAWN_ENABLE_INSTALL=ON \
+            -DDAWN_ENABLE_VULKAN=ON \
+            -DDAWN_ENABLE_OPENGLES=OFF \
+            -DDAWN_ENABLE_DESKTOP_GL=OFF \
+            -DDAWN_ENABLE_SWIFTSHADER=OFF \
+            -DDAWN_ENABLE_SPIRV_VALIDATION=OFF \
+            -DDAWN_BUILD_SAMPLES=OFF \
+            -DDAWN_BUILD_TESTS=OFF \
+            -DDAWN_BUILD_MONOLITHIC_LIBRARY=ON \
+            -DTINT_BUILD_TESTS=OFF \
+            -DTINT_BUILD_CMD_TOOLS=OFF
+
+      - name: Build Dawn WebGPU library
+        run: |
+          cmake --build dawn-build \
+            --target webgpu_dawn \
+            --parallel 2
