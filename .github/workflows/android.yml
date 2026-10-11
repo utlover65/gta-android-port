@@ -30,6 +30,7 @@ jobs:
       - name: Accept Android SDK licenses
         shell: bash
         run: |
+          set +o pipefail
           yes | sdkmanager --licenses
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
