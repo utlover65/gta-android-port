@@ -1,6 +1,7 @@
 package org.utlover65.astravulkanprobe;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -78,6 +79,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         vulkanButton.setAllCaps(false);
         vulkanButton.setOnClickListener(v -> selectRenderer(MODE_VULKAN));
         controls.addView(vulkanButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button browserPortButton = new Button(this);
+        browserPortButton.setText("Browser port");
+        browserPortButton.setAllCaps(false);
+        browserPortButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, BrowserPortActivity.class)));
+        controls.addView(browserPortButton,
                 new LinearLayout.LayoutParams(0, -2, 1));
 
         FrameLayout.LayoutParams controlsParams =

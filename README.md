@@ -27,3 +27,10 @@ This is only a GPU/driver probe. It does not prove Dawn, the GTA engine, or the 
 Use the report to select the Dawn/Vulkan build strategy, then port the actual native host: memory mapping and threading, Android window surface, audio output, filesystem paths, and touch/controller input. Keep existing renderer and game features; don't delete functionality to make an early build appear successful.
 
 No GTA assets are included. Use only game data you are legally entitled to use.
+
+
+## Browser port compatibility gate
+
+The **Browser port** button opens the live browser build in an Android WebView using a low-memory profile. The overlay reports whether that exact WebView exposes WebGPU, OffscreenCanvas, SharedArrayBuffer, and cross-origin isolation. This is an online compatibility test, not yet an offline/native integration; the original Dawn and Vulkan probes remain available.
+
+The integration notes in `docs/browser-runtime-integration.md` explain the runtime contracts found in the provided bundle and why its ZIP is not yet a complete offline deployment.

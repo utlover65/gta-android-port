@@ -1,0 +1,14 @@
+GTA Android browser-port compatibility patch
+
+This patch adds an optional “Browser port” button to the current Astra Dawn/Vulkan probe app. It opens the live GTA browser port inside Android WebView and reports the APIs the engine depends on. The existing Dawn and Vulkan probe screens and C++ sources are left untouched.
+
+Apply on Termux:
+  unzip browser-port-webview-baseline.zip -d ~/gta-android-port
+  python ~/gta-android-port/scripts/apply_browser_port_webview_baseline.py ~/gta-android-port
+  cd ~/gta-android-port
+  git diff --check
+  git status --short
+
+Then commit/push the patch to your GitHub repo and run the existing Android build workflow. The APK has to be installed on the Astra to test the real WebView provider. The new activity starts the live game with ?low=1&scale=0.75&fps=30 to give the first launch a conservative memory/render profile.
+
+IMPORTANT LIMITATION: this is an online WebView feasibility gate, not yet a standalone offline or native-renderer port. The supplied ZIP is incomplete as an offline site: it contains 2,893 files under its game-data asset root against 5,814 manifest records and lacks the translated WebGPU shader index/packs (although original GTA shader assets are included). Do not copy GTA assets into the repository or APK. This patch does not upload, bundle, or modify any game assets. The WebView overlay reports API availability; a successful capability report is not the same as reaching playable gameplay.
