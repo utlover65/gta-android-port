@@ -49,3 +49,10 @@ The **Native game audit** screen lets you select the supplied `game.wasm` and in
 The optional **Native WASM engine** build runs the selected game module through the official Wasmtime Android ARM64 C API from a JNI/C++ activity. It does not use WebView. It compiles and instantiates the actual module, runs the Wasm start section and `__wasm_call_ctors`, and offers a bounded attempt to call `__main_argc_argv`.
 
 This is a native execution/bootstrap experiment, **not playable GTA V yet**. Unimplemented GPU command-worker, remote/batch asset I/O, Emscripten pthread, audio and input imports are temporarily default-stubbed. Follow `docs/native-runtime-stage1.md` and read the on-screen warnings before running it; the module declares a 3 GiB minimum shared memory. To build this variant, run the existing GitHub Actions workflow manually and set `native_engine=true`.
+
+
+## Live gameplay smoke test
+
+The **Live gameplay test** entry opens the actual hosted game build, not a synthetic scene. It records the game's runtime progress channel, JavaScript/worker crash reports, canvas dimensions, page animation ticks, and the browser APIs the real build needs. The 90-second test waits for the world-loaded milestone, then sends a native Android `W` key event and compares captured viewport pixels around that input interval. It reports a failure/incomplete result rather than treating a loaded page or WASM header as gameplay.
+
+This is a **live browser/WebView gameplay test**, not proof that the separate native Wasmtime path is playable. The native path still needs real GPU-worker, threaded startup, asset-range I/O, audio, and input host services before it can pass a native gameplay test.
