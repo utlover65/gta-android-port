@@ -97,6 +97,46 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         controls.addView(nativeGameplayButton,
                 new LinearLayout.LayoutParams(0, -2, 1));
 
+        Button nativeEngineButton = new Button(this);
+        nativeEngineButton.setText("Native WASM engine");
+        nativeEngineButton.setAllCaps(false);
+        nativeEngineButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameEngineActivity.class)));
+        controls.addView(nativeEngineButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button nativeEngineButton = new Button(this);
+        nativeEngineButton.setText("Native WASM engine");
+        nativeEngineButton.setAllCaps(false);
+        nativeEngineButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameEngineActivity.class)));
+        controls.addView(nativeEngineButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button nativeEngineButton = new Button(this);
+        nativeEngineButton.setText("Native WASM engine");
+        nativeEngineButton.setAllCaps(false);
+        nativeEngineButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameEngineActivity.class)));
+        controls.addView(nativeEngineButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button nativeEngineButton = new Button(this);
+        nativeEngineButton.setText("Native WASM engine");
+        nativeEngineButton.setAllCaps(false);
+        nativeEngineButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameEngineActivity.class)));
+        controls.addView(nativeEngineButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button nativeEngineButton = new Button(this);
+        nativeEngineButton.setText("Native WASM engine");
+        nativeEngineButton.setAllCaps(false);
+        nativeEngineButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameEngineActivity.class)));
+        controls.addView(nativeEngineButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
         Button nativePortTestButton = new Button(this);
         nativePortTestButton.setText("Native host test");
         nativePortTestButton.setAllCaps(false);

@@ -2,6 +2,12 @@ name: Build Astra Dawn WebGPU APK
 
 on:
   workflow_dispatch:
+    inputs:
+      native_engine:
+        description: "Build experimental native Wasmtime engine test (not yet playable)"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main, master]
 
@@ -11,7 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -123,8 +129,48 @@ jobs:
           file app/src/main/jniLibs/arm64-v8a/libwebgpu_dawn.so
           ls -lh app/src/main/jniLibs/arm64-v8a/libwebgpu_dawn.so app/src/main/cpp/include/webgpu/webgpu.h
 
+      - name: Stage pinned Wasmtime Android ARM64 runtime
+        if: ${{ inputs.native_engine == true }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ARCHIVE="$RUNNER_TEMP/wasmtime-v49.0.2-aarch64-android-c-api.tar.xz"
+          URL="https://github.com/bytecodealliance/wasmtime/releases/download/v49.0.2/wasmtime-v49.0.2-aarch64-android-c-api.tar.xz"
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o "$ARCHIVE"
+          echo "7d0fcac9a3533df910edfd0651990ba17161827485120d026f25859cf77df045  $ARCHIVE" | sha256sum -c -
+          EXTRACT="$RUNNER_TEMP/wasmtime-android-c-api"
+          mkdir -p "$EXTRACT"
+          tar -xJf "$ARCHIVE" -C "$EXTRACT"
+          LIB="$(find "$EXTRACT" -type f -name libwasmtime.so -print -quit)"
+          HEADER="$(find "$EXTRACT" -type f -name wasmtime.h -print -quit)"
+          test -n "$LIB" && test -s "$LIB"
+          test -n "$HEADER" && test -s "$HEADER"
+          INCLUDE="$(dirname "$HEADER")"
+          test -f "$INCLUDE/wasmtime/conf.h"
+          if ! grep -q '^#define WASMTIME_FEATURE_THREADS' "$INCLUDE/wasmtime/conf.h"; then
+            echo "This Wasmtime C API artifact was built without shared-memory/thread support required by game.wasm."
+            exit 1
+          fi
+          if ! grep -q '^#define WASMTIME_FEATURE_COMPILER' "$INCLUDE/wasmtime/conf.h"; then
+            echo "This Wasmtime C API artifact does not expose the module compiler API required by this host."
+            exit 1
+          fi
+          mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/cpp/wasmtime-include app/src/main/assets/licenses
+          cp "$LIB" app/src/main/jniLibs/arm64-v8a/libwasmtime.so
+          cp -R "$INCLUDE/." app/src/main/cpp/wasmtime-include/
+          curl -fL --retry 3 --retry-delay 2             "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v49.0.2/LICENSE"             -o app/src/main/assets/licenses/wasmtime-LICENSE.txt
+          file app/src/main/jniLibs/arm64-v8a/libwasmtime.so
+          ls -lh app/src/main/jniLibs/arm64-v8a/libwasmtime.so app/src/main/cpp/wasmtime-include/wasmtime.h app/src/main/assets/licenses/wasmtime-LICENSE.txt
+
       - name: Build installable debug APK
-        run: gradle --no-daemon assembleDebug
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ inputs.native_engine }}" = "true" ]; then
+            gradle --no-daemon -PnativeEngine=true assembleDebug
+          else
+            gradle --no-daemon assembleDebug
+          fi
 
       - name: Verify APK exists
         shell: bash
@@ -138,7 +184,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: astra-dawn-webgpu-debug-apk
+          name: ${{ inputs.native_engine == true && 'gta-native-engine-debug-apk' || 'astra-dawn-webgpu-debug-apk' }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

@@ -43,3 +43,9 @@ The **Native host test** screen directly exercises Dawn/WebGPU and Vulkan frame 
 ## Native gameplay engine preflight
 
 The **Native game audit** screen lets you select the supplied `game.wasm` and inspects its actual import and memory sections. It is a diagnostic gate, not gameplay: it confirms which WebAssembly host ABI must be ported before native execution can start. No game assets are copied into the repository or APK.
+
+## Native Wasmtime engine experiment
+
+The optional **Native WASM engine** build runs the selected game module through the official Wasmtime Android ARM64 C API from a JNI/C++ activity. It does not use WebView. It compiles and instantiates the actual module, runs the Wasm start section and `__wasm_call_ctors`, and offers a bounded attempt to call `__main_argc_argv`.
+
+This is a native execution/bootstrap experiment, **not playable GTA V yet**. Unimplemented GPU command-worker, remote/batch asset I/O, Emscripten pthread, audio and input imports are temporarily default-stubbed. Follow `docs/native-runtime-stage1.md` and read the on-screen warnings before running it; the module declares a 3 GiB minimum shared memory. To build this variant, run the existing GitHub Actions workflow manually and set `native_engine=true`.
