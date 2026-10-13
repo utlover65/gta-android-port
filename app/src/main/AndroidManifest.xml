@@ -20,5 +20,9 @@
             android:name=".BrowserPortActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape" />
+        <activity
+            android:name=".NativePortTestActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape" />
     </application>
 </manifest>

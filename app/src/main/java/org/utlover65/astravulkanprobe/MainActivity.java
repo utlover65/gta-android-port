@@ -29,9 +29,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         System.loadLibrary("dawn_probe");
     }
 
-    private static native String presentVulkanFrame(Surface surface);
-    private static native String presentWebGPUFrame(Surface surface);
-    private static native void releaseWebGPU();
+    static native String presentVulkanFrame(Surface surface);
+    static native String presentWebGPUFrame(Surface surface);
+    static native void releaseWebGPU();
 
     private final ExecutorService renderExecutor =
             Executors.newSingleThreadExecutor(r -> new Thread(r, "astra-render-test"));
@@ -87,6 +87,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         browserPortButton.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, BrowserPortActivity.class)));
         controls.addView(browserPortButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button nativePortTestButton = new Button(this);
+        nativePortTestButton.setText("Native host test");
+        nativePortTestButton.setAllCaps(false);
+        nativePortTestButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativePortTestActivity.class)));
+        controls.addView(nativePortTestButton,
                 new LinearLayout.LayoutParams(0, -2, 1));
 
         FrameLayout.LayoutParams controlsParams =

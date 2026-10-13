@@ -34,3 +34,8 @@ No GTA assets are included. Use only game data you are legally entitled to use.
 The **Browser port** button opens the live browser build in an Android WebView using a low-memory profile. The overlay reports whether that exact WebView exposes WebGPU, OffscreenCanvas, SharedArrayBuffer, and cross-origin isolation. This is an online compatibility test, not yet an offline/native integration; the original Dawn and Vulkan probes remain available.
 
 The integration notes in `docs/browser-runtime-integration.md` explain the runtime contracts found in the provided bundle and why its ZIP is not yet a complete offline deployment.
+
+
+## Native Android host test
+
+The **Native host test** screen directly exercises Dawn/WebGPU and Vulkan frame presentation to an Android `SurfaceView`, app-private file read/write, background-thread scheduling, Android audio API access, and touch input. It bypasses WebView. It is a host readiness test, not a GTA gameplay pass; see `docs/native-port-test.md` for limits and next integration requirements.

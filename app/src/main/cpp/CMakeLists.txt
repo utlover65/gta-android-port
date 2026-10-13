@@ -44,3 +44,9 @@ target_link_libraries(dawn_probe PRIVATE
     ${android-lib}
     ${vulkan-lib}
 )
+
+# JNI tests for native Android host services used by a future engine integration.
+add_library(native_host_test SHARED native_host_test.cpp)
+target_compile_features(native_host_test PRIVATE cxx_std_17)
+target_link_libraries(native_host_test PRIVATE ${log-lib} ${android-lib})
+
