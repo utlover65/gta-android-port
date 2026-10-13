@@ -89,6 +89,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         controls.addView(browserPortButton,
                 new LinearLayout.LayoutParams(0, -2, 1));
 
+        Button nativeGameplayButton = new Button(this);
+        nativeGameplayButton.setText("Native game audit");
+        nativeGameplayButton.setAllCaps(false);
+        nativeGameplayButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativeGameplayPreflightActivity.class)));
+        controls.addView(nativeGameplayButton,
+                new LinearLayout.LayoutParams(0, -2, 1));
+
         Button nativePortTestButton = new Button(this);
         nativePortTestButton.setText("Native host test");
         nativePortTestButton.setAllCaps(false);

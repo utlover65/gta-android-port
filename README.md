@@ -39,3 +39,7 @@ The integration notes in `docs/browser-runtime-integration.md` explain the runti
 ## Native Android host test
 
 The **Native host test** screen directly exercises Dawn/WebGPU and Vulkan frame presentation to an Android `SurfaceView`, app-private file read/write, background-thread scheduling, Android audio API access, and touch input. It bypasses WebView. It is a host readiness test, not a GTA gameplay pass; see `docs/native-port-test.md` for limits and next integration requirements.
+
+## Native gameplay engine preflight
+
+The **Native game audit** screen lets you select the supplied `game.wasm` and inspects its actual import and memory sections. It is a diagnostic gate, not gameplay: it confirms which WebAssembly host ABI must be ported before native execution can start. No game assets are copied into the repository or APK.
