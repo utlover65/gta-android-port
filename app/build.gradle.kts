@@ -2,6 +2,7 @@ plugins { id("com.android.application") }
 android {
     namespace = "org.utlover65.astravulkanprobe"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
     defaultConfig {
         applicationId = "org.utlover65.astravulkanprobe"
         minSdk = 26
