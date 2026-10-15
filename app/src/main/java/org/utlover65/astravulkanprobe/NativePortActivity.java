@@ -349,7 +349,7 @@ public final class NativePortActivity extends Activity implements SurfaceHolder.
             case KeyEvent.KEYCODE_PAGE_UP: return 0x21;
             case KeyEvent.KEYCODE_PAGE_DOWN: return 0x22;
             case KeyEvent.KEYCODE_HOME: return 0x24;
-            case KeyEvent.KEYCODE_END: return 0x23;
+            case KeyEvent.KEYCODE_MOVE_END: return 0x23;
             case KeyEvent.KEYCODE_INSERT: return 0x2D;
             case KeyEvent.KEYCODE_FORWARD_DEL: return 0x2E;
             case KeyEvent.KEYCODE_F1: return 0x70;
