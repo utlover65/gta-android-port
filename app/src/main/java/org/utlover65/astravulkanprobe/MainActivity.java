@@ -105,6 +105,13 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         controls.addView(nativeEngineButton,
                 new LinearLayout.LayoutParams(0, -2, 1));
 
+        Button nativeAotButton = new Button(this);
+        nativeAotButton.setText("Native GTA V AOT");
+        nativeAotButton.setAllCaps(false);
+        nativeAotButton.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, NativePortActivity.class)));
+        controls.addView(nativeAotButton, new LinearLayout.LayoutParams(0, -2, 1));
+
 
 
 

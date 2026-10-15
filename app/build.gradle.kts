@@ -1,5 +1,7 @@
 plugins { id("com.android.application") }
 val nativeEngineBuild = providers.gradleProperty("nativeEngine").orNull == "true"
+val nativeAotBuild = providers.gradleProperty("nativeAot").orNull == "true"
+require(!(nativeEngineBuild && nativeAotBuild)) { "nativeEngine and nativeAot are mutually exclusive" }
 android {
     namespace = "org.utlover65.astravulkanprobe"
     compileSdk = 35
@@ -15,6 +17,7 @@ android {
             cmake {
                 cppFlags += "-std=c++17"
                 if (nativeEngineBuild) arguments += "-DBUILD_NATIVE_GTA_ENGINE=ON"
+                if (nativeAotBuild) arguments += "-DBUILD_NATIVE_GTAV_AOT=ON"
             }
         }
     }

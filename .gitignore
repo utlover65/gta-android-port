@@ -1,3 +1,15 @@
 
 __pycache__/
 *.py[cod]
+# Native GTA V AOT build inputs and generated 1GB+ sources
+/port-input/game.wasm
+/app/src/main/cpp/gtav_native/gen/
+/app/src/main/cpp/gtav_native/tools/wabt/
+
+GoFile-Direct-Link/
+
+# Local GTA asset downloads and audit output
+gta-asset-collection.zip
+gta-asset-collection/
+gta-file-audit/
+zip-build.log
