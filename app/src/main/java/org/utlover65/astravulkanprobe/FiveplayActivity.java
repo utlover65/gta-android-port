@@ -163,7 +163,9 @@ public final class FiveplayActivity extends Activity {
                 if (request.isForMainFrame() && status != null) {
                     statusPinned = true;
                     status.setVisibility(View.VISIBLE);
-                    status.setText("Page failed to load. Tap INFO for details; check your connection.");
+                    status.setText("WebView error " + error.getErrorCode()
+                            + ": " + error.getDescription()
+                            + "\\nTap INFO for compatibility details.");
                 }
             }
 
