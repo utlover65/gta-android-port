@@ -178,7 +178,16 @@ public final class FiveplayActivity extends Activity {
                         + " reason=" + response.getReasonPhrase());
             }
 
-            // Intentionally do not override onReceivedSslError: WebView's secure default is to cancel.
+            @Override
+            public void onReceivedSslError(
+                    WebView view,
+                    android.webkit.SslErrorHandler handler,
+                    android.net.http.SslError error) {
+                Log.e(TAG, "SSL error: url=" + error.getUrl()
+                        + " primaryError=" + error.getPrimaryError()
+                        + " certificate=" + error.getCertificate());
+                handler.cancel();
+            }
         });
 
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
