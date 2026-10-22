@@ -45,7 +45,7 @@ import java.util.Set;
  */
 public final class FiveplayActivity extends Activity {
     private static final String TAG = "WebGamePort";
-    private static final String START_URL = "https://v2.fiveplay.lol/";
+    private static final String START_URL = "https://fiveplay.lol/";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, Set<Integer>> keySources = new HashMap<>();
