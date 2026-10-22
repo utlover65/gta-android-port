@@ -183,10 +183,18 @@ public final class FiveplayActivity extends Activity {
                     WebView view,
                     android.webkit.SslErrorHandler handler,
                     android.net.http.SslError error) {
-                Log.e(TAG, "SSL error: url=" + error.getUrl()
-                        + " primaryError=" + error.getPrimaryError()
-                        + " certificate=" + error.getCertificate());
+                String details = "SSL CONNECTION FAILED\\n\\n"
+                        + "URL: " + error.getUrl() + "\\n"
+                        + "Error code: " + error.getPrimaryError() + "\\n"
+                        + "Certificate: " + error.getCertificate()
+                        + "\\n\\nConnection cancelled securely.";
+                Log.e(TAG, details);
                 handler.cancel();
+                runOnUiThread(() -> new android.app.AlertDialog.Builder(FiveplayActivity.this)
+                        .setTitle("Fiveplay SSL diagnostic")
+                        .setMessage(details)
+                        .setPositiveButton("Close", null)
+                        .show());
             }
         });
 
