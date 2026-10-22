@@ -153,14 +153,29 @@ public final class FiveplayActivity extends Activity {
                 Log.i(TAG, "Page finished: " + url + "; progress=" + pageProgress);
             }
 
-            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            @Override public void onReceivedError(
+                    WebView view, WebResourceRequest request, WebResourceError error) {
+                Log.e(TAG, "Web error: url=" + request.getUrl()
+                        + " mainFrame=" + request.isForMainFrame()
+                        + " code=" + error.getErrorCode()
+                        + " description=" + error.getDescription());
+
                 if (request.isForMainFrame() && status != null) {
                     statusPinned = true;
                     status.setVisibility(View.VISIBLE);
                     status.setText("Page failed to load. Tap INFO for details; check your connection.");
                 }
-                Log.e(TAG, "Web load error: " + error.getErrorCode() + " " + error.getDescription());
             }
+
+            @Override public void onReceivedHttpError(
+                    WebView view, WebResourceRequest request,
+                    android.webkit.WebResourceResponse response) {
+                Log.e(TAG, "HTTP error: url=" + request.getUrl()
+                        + " mainFrame=" + request.isForMainFrame()
+                        + " status=" + response.getStatusCode()
+                        + " reason=" + response.getReasonPhrase());
+            }
+
             // Intentionally do not override onReceivedSslError: WebView's secure default is to cancel.
         });
 
