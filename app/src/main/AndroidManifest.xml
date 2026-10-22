@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    <uses-feature android:name="android.hardware.vulkan.version"
-        android:version="0x00401000" android:required="false" />
     <application
         android:allowBackup="false"
-        android:label="Astra Dawn WebGPU Probe"
+        android:hardwareAccelerated="true"
+        android:label="GTA V"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
-            android:name=".MainActivity"
+            android:name=".FiveplayActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize"
             android:exported="true"
             android:screenOrientation="sensorLandscape">
             <intent-filter>
@@ -17,22 +18,5 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".BrowserPortActivity"
-            android:exported="false"
-            android:screenOrientation="sensorLandscape" />
-        <activity
-            android:name=".NativePortTestActivity"
-            android:exported="false"
-            android:screenOrientation="sensorLandscape" />
-        <activity
-            android:name=".NativeGameplayPreflightActivity"
-            android:exported="false"
-            android:screenOrientation="sensorLandscape" />
-        <activity
-            android:name=".NativeGameEngineActivity"
-            android:exported="false"
-            android:screenOrientation="sensorLandscape" />
-        <activity android:name=".NativePortActivity" android:exported="false" android:screenOrientation="sensorLandscape" />
     </application>
 </manifest>
