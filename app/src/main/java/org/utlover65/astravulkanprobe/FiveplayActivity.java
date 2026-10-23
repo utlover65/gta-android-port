@@ -178,10 +178,15 @@ public final class FiveplayActivity extends Activity {
                         status.setText("WebView TLS failed. Opening Fiveplay in your browser…");
                     }
                     try {
-                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, failedUri);
-                        browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
-                        startActivity(Intent.createChooser(browserIntent, "Open Fiveplay in browser"));
-                        return;
+androidx.browser.customtabs.CustomTabsIntent tabs =
+        new androidx.browser.customtabs.CustomTabsIntent.Builder()
+                .setShowTitle(false)
+                .setUrlBarHidingEnabled(true)
+                .setToolbarColor(android.graphics.Color.BLACK)
+                .build();
+
+tabs.launchUrl(FiveplayActivity.this, failedUri);
+return;
                     } catch (Exception e) {
                         Log.e(TAG, "Could not open Fiveplay in an external browser", e);
                     }

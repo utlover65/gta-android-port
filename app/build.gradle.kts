@@ -42,4 +42,5 @@ android {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.17.1")
+    implementation("androidx.browser:browser:1.8.0")
 }
