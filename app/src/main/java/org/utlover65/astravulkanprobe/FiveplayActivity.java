@@ -55,6 +55,7 @@ public final class FiveplayActivity extends Activity {
     private TouchOverlay overlay;
     private boolean statusPinned;
     private boolean pageFinished;
+    private boolean browserFallbackAttempted;
     private int pageProgress;
 
     @Override protected void onCreate(Bundle state) {
@@ -159,6 +160,32 @@ public final class FiveplayActivity extends Activity {
                         + " mainFrame=" + request.isForMainFrame()
                         + " code=" + error.getErrorCode()
                         + " description=" + error.getDescription());
+
+                // Do not bypass TLS. If this host's handshake fails in WebView, hand off to
+                // the user's browser, which may have a working TLS/HTTP3 route to the same URL.
+                Uri failedUri = request.getUrl();
+                String failedHost = failedUri.getHost();
+                if (request.isForMainFrame()
+                        && error.getErrorCode() == WebViewClient.ERROR_FAILED_SSL_HANDSHAKE
+                        && !browserFallbackAttempted
+                        && failedHost != null
+                        && (failedHost.equalsIgnoreCase("fiveplay.lol")
+                            || failedHost.toLowerCase(Locale.ROOT).endsWith(".fiveplay.lol"))) {
+                    browserFallbackAttempted = true;
+                    if (status != null) {
+                        statusPinned = true;
+                        status.setVisibility(View.VISIBLE);
+                        status.setText("WebView TLS failed. Opening Fiveplay in your browser…");
+                    }
+                    try {
+                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, failedUri);
+                        browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
+                        startActivity(Intent.createChooser(browserIntent, "Open Fiveplay in browser"));
+                        return;
+                    } catch (Exception e) {
+                        Log.e(TAG, "Could not open Fiveplay in an external browser", e);
+                    }
+                }
 
                 if (request.isForMainFrame() && status != null) {
                     statusPinned = true;
