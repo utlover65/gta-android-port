@@ -216,6 +216,26 @@ public final class FiveplayActivity extends Activity {
         root.addView(status, statusParams);
 
         setContentView(root);
+
+        // Prefer HTTP/3 (QUIC) for Fiveplay before first load.
+        // TLS certificate validation remains enabled.
+        try {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(
+                        androidx.webkit.WebViewFeature.MULTI_PROFILE)
+                    && androidx.webkit.WebViewFeature.isFeatureSupported(
+                        androidx.webkit.WebViewFeature.ADD_QUIC_HINTS_V1)) {
+                androidx.webkit.Profile profile =
+                        androidx.webkit.WebViewCompat.getProfile(webView);
+                profile.addQuicHints(
+                        java.util.Collections.singleton("https://fiveplay.lol"));
+                Log.i(TAG, "QUIC preference enabled for fiveplay.lol");
+            } else {
+                Log.w(TAG, "This WebView provider does not support QUIC hints");
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Could not enable the Fiveplay QUIC hint", e);
+        }
+
         webView.loadUrl(START_URL);
     }
 

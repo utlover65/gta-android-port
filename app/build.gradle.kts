@@ -39,3 +39,7 @@ android {
 
     buildTypes { release { isMinifyEnabled = false } }
 }
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.17.1")
+}
