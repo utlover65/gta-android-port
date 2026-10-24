@@ -541,11 +541,63 @@ public final class FiveplayActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
+    private String jsKeyForCode(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_W: return "w";
+            case KeyEvent.KEYCODE_A: return "a";
+            case KeyEvent.KEYCODE_S: return "s";
+            case KeyEvent.KEYCODE_D: return "d";
+            case KeyEvent.KEYCODE_SPACE: return " ";
+            case KeyEvent.KEYCODE_F: return "f";
+            case KeyEvent.KEYCODE_E: return "e";
+            case KeyEvent.KEYCODE_SHIFT_LEFT:
+            case KeyEvent.KEYCODE_SHIFT_RIGHT: return "Shift";
+            case KeyEvent.KEYCODE_V: return "v";
+            case KeyEvent.KEYCODE_ESCAPE: return "Escape";
+            case KeyEvent.KEYCODE_ENTER: return "Enter";
+            default: return "";
+        }
+    }
+
+    private String jsCodeForCode(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_W: return "KeyW";
+            case KeyEvent.KEYCODE_A: return "KeyA";
+            case KeyEvent.KEYCODE_S: return "KeyS";
+            case KeyEvent.KEYCODE_D: return "KeyD";
+            case KeyEvent.KEYCODE_SPACE: return "Space";
+            case KeyEvent.KEYCODE_F: return "KeyF";
+            case KeyEvent.KEYCODE_E: return "KeyE";
+            case KeyEvent.KEYCODE_SHIFT_LEFT:
+            case KeyEvent.KEYCODE_SHIFT_RIGHT: return "ShiftLeft";
+            case KeyEvent.KEYCODE_V: return "KeyV";
+            case KeyEvent.KEYCODE_ESCAPE: return "Escape";
+            case KeyEvent.KEYCODE_ENTER: return "Enter";
+            default: return "";
+        }
+    }
+
     private void dispatchKey(int keyCode, boolean down) {
         if (webView == null) return;
         webView.requestFocus();
+        String key = jsKeyForCode(keyCode);
+        String code = jsCodeForCode(keyCode);
+        if (key.isEmpty() || code.isEmpty()) return;
+        String js = "(function(){const key=" + JSONObject.quote(key)
+                + ",code=" + JSONObject.quote(code)
+                + ",down=" + (down ? "true" : "false")
+                + ";const target=document.activeElement&&document.activeElement!==document.body"
+                + "?document.activeElement:(document.pointerLockElement||document.querySelector('canvas')||document);"
+                + "try{target.focus({preventScroll:true})}catch(e){}"
+                + "const init={key:key,code:code,bubbles:true,cancelable:true,composed:true,repeat:false,"
+                + "shiftKey:key==='Shift'||code==='ShiftLeft'||code==='ShiftRight'};"
+                + "target.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',init));"
+                + "if(target!==document)document.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',init));"
+                + "})();";
+        webView.evaluateJavascript(js, null);
         long now = SystemClock.uptimeMillis();
-        webView.dispatchKeyEvent(new KeyEvent(now, now, down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP, keyCode, 0));
+        webView.dispatchKeyEvent(new KeyEvent(now, now,
+                down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP, keyCode, 0));
     }
 
     private void setKeySource(String source, Set<Integer> codes) {
@@ -624,7 +676,7 @@ public final class FiveplayActivity extends Activity {
         private float unit;
         boolean lookMode;
 
-        TouchOverlay() { super(FiveplayActivity.this); setLayerType(View.LAYER_TYPE_SOFTWARE, null); setClickable(false); }
+        TouchOverlay() { super(FiveplayActivity.this); setLayerType(View.LAYER_TYPE_SOFTWARE, null); setClickable(true); setFocusable(false); }
         private float u() { return Math.max(1f, getHeight()); }
         private float bx(float right) { return getWidth() - u() * right; }
         private float by(float fraction) { return u() * fraction; }
