@@ -46,6 +46,8 @@ import java.util.Set;
 public final class FiveplayActivity extends Activity {
     private static final String TAG = "WebGamePort";
     private static final String START_URL = "https://fiveplay.lol/";
+    private static final String FALLBACK_URL = "https://gta5-87g.pages.dev/?low=1&fps=30&res=1280x720&shadows=0";
+    private static final long STARTUP_TIMEOUT_MS = 15_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, Set<Integer>> keySources = new HashMap<>();
@@ -55,8 +57,14 @@ public final class FiveplayActivity extends Activity {
     private TouchOverlay overlay;
     private boolean statusPinned;
     private boolean pageFinished;
-    private boolean browserFallbackAttempted;
+    private boolean fallbackAttempted;
     private int pageProgress;
+    private final Runnable startupTimeout = () -> {
+        if (webView != null && !pageFinished && !fallbackAttempted
+                && isFiveplayUrl(webView.getUrl())) {
+            loadFallback("startup timeout after 15 seconds");
+        }
+    };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -128,7 +136,7 @@ public final class FiveplayActivity extends Activity {
                     return true;
                 }
                 String host = uri.getHost();
-                if (host != null && (host.equalsIgnoreCase("fiveplay.lol") || host.toLowerCase(Locale.ROOT).endsWith(".fiveplay.lol"))) return false;
+                if (isFiveplayHost(host) || isFallbackHost(host)) return false;
                 // Keep unrelated pages out of the embedded game surface.
                 try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
                 catch (Exception e) { Toast.makeText(FiveplayActivity.this, "External link blocked", Toast.LENGTH_SHORT).show(); }
@@ -140,12 +148,15 @@ public final class FiveplayActivity extends Activity {
                 pageProgress = 0;
                 if (status != null) {
                     status.setVisibility(View.VISIBLE);
-                    status.setText("Connecting to the game website…");
+                    status.setText(fallbackAttempted
+                            ? "Connecting to the alternate GTA V host…"
+                            : "Connecting to the game website…");
                 }
             }
 
             @Override public void onPageFinished(WebView view, String url) {
                 pageFinished = true;
+                handler.removeCallbacks(startupTimeout);
                 if (status != null && !statusPinned) {
                     status.setVisibility(View.VISIBLE);
                     status.setText("Fiveplay Web · INFO: tap to check compatibility");
@@ -161,35 +172,13 @@ public final class FiveplayActivity extends Activity {
                         + " code=" + error.getErrorCode()
                         + " description=" + error.getDescription());
 
-                // Do not bypass TLS. If this host's handshake fails in WebView, hand off to
-                // the user's browser, which may have a working TLS/HTTP3 route to the same URL.
+                // Fail over only for a failed top-level Fiveplay document. Subresource errors
+                // should not replace the whole page, and TLS validation remains enabled.
                 Uri failedUri = request.getUrl();
-                String failedHost = failedUri.getHost();
-                if (request.isForMainFrame()
-                        && error.getErrorCode() == WebViewClient.ERROR_FAILED_SSL_HANDSHAKE
-                        && !browserFallbackAttempted
-                        && failedHost != null
-                        && (failedHost.equalsIgnoreCase("fiveplay.lol")
-                            || failedHost.toLowerCase(Locale.ROOT).endsWith(".fiveplay.lol"))) {
-                    browserFallbackAttempted = true;
-                    if (status != null) {
-                        statusPinned = true;
-                        status.setVisibility(View.VISIBLE);
-                        status.setText("WebView TLS failed. Opening Fiveplay in your browser…");
-                    }
-                    try {
-androidx.browser.customtabs.CustomTabsIntent tabs =
-        new androidx.browser.customtabs.CustomTabsIntent.Builder()
-                .setShowTitle(false)
-                .setUrlBarHidingEnabled(true)
-                .setToolbarColor(android.graphics.Color.BLACK)
-                .build();
-
-tabs.launchUrl(FiveplayActivity.this, failedUri);
-return;
-                    } catch (Exception e) {
-                        Log.e(TAG, "Could not open Fiveplay in an external browser", e);
-                    }
+                if (request.isForMainFrame() && isFiveplayUrl(failedUri.toString())
+                        && !fallbackAttempted) {
+                    loadFallback("Fiveplay network error " + error.getErrorCode());
+                    return;
                 }
 
                 if (request.isForMainFrame() && status != null) {
@@ -208,6 +197,10 @@ return;
                         + " mainFrame=" + request.isForMainFrame()
                         + " status=" + response.getStatusCode()
                         + " reason=" + response.getReasonPhrase());
+                if (request.isForMainFrame() && isFiveplayUrl(request.getUrl().toString())
+                        && response.getStatusCode() >= 400 && !fallbackAttempted) {
+                    loadFallback("Fiveplay HTTP " + response.getStatusCode());
+                }
             }
 
             @Override
@@ -222,6 +215,10 @@ return;
                         + "\\n\\nConnection cancelled securely.";
                 Log.e(TAG, details);
                 handler.cancel();
+                if (isFiveplayUrl(error.getUrl()) && !fallbackAttempted) {
+                    loadFallback("Fiveplay TLS/certificate error");
+                    return;
+                }
                 runOnUiThread(() -> new android.app.AlertDialog.Builder(FiveplayActivity.this)
                         .setTitle("Fiveplay SSL diagnostic")
                         .setMessage(details)
@@ -269,6 +266,38 @@ return;
         }
 
         webView.loadUrl(START_URL);
+        handler.postDelayed(startupTimeout, STARTUP_TIMEOUT_MS);
+    }
+
+    private boolean isFiveplayHost(String host) {
+        return host != null && (host.equalsIgnoreCase("fiveplay.lol")
+                || host.toLowerCase(Locale.ROOT).endsWith(".fiveplay.lol"));
+    }
+
+    private boolean isFallbackHost(String host) {
+        return host != null && host.equalsIgnoreCase("gta5-87g.pages.dev");
+    }
+
+    private boolean isFiveplayUrl(String url) {
+        if (url == null) return false;
+        try { return isFiveplayHost(Uri.parse(url).getHost()); }
+        catch (RuntimeException ignored) { return false; }
+    }
+
+    private void loadFallback(String reason) {
+        if (webView == null || fallbackAttempted) return;
+        fallbackAttempted = true;
+        handler.removeCallbacks(startupTimeout);
+        pageFinished = false;
+        pageProgress = 0;
+        statusPinned = false;
+        if (status != null) {
+            status.setVisibility(View.VISIBLE);
+            status.setText("Fiveplay failed (" + reason + "). Loading alternate GTA V host…");
+        }
+        Log.w(TAG, "Switching once from Fiveplay to fallback URL: " + FALLBACK_URL + "; reason=" + reason);
+        webView.stopLoading();
+        webView.loadUrl(FALLBACK_URL);
     }
 
     private int dp(float value) {
