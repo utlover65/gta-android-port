@@ -742,8 +742,9 @@ public final class FiveplayActivity extends Activity {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Map<Integer, Integer> pointerButtons = new HashMap<>();
         private final Set<Integer> downButtons = new HashSet<>();
-        private int stickPointer = -1, lookPointer = -1;
+        private int stickPointer = -1, lookPointer = -1, cameraStickPointer = -1;
         private float stickCx, stickCy, stickX, stickY, lookX, lookY;
+        private float cameraStickX, cameraStickY;
         private float unit;
         boolean lookMode = true;
         boolean lookMoved;
@@ -778,6 +779,16 @@ public final class FiveplayActivity extends Activity {
             c.drawCircle(leftCx, leftCy, leftR, p);
             c.drawCircle(leftCx, leftCy, leftR * .52f, p);
             if (stickPointer >= 0) { p.setStyle(Paint.Style.FILL); p.setColor(0x72FFFFFF); c.drawCircle(stickX, stickY, unit * .052f, p); }
+            // Independent camera-look joystick on the right, above the action buttons.
+            float camCx = getWidth() - unit * .30f, camCy = unit * .34f, camR = unit * .105f;
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(0x68FFFFFF);
+            c.drawCircle(camCx, camCy, camR, p); c.drawCircle(camCx, camCy, camR * .48f, p);
+            if (cameraStickPointer >= 0) {
+                p.setStyle(Paint.Style.FILL); p.setColor(0x72FFFFFF);
+                c.drawCircle(cameraStickX, cameraStickY, unit * .045f, p);
+            }
+            p.setStyle(Paint.Style.FILL); p.setColor(0xBFFFFFFF); p.setTextAlign(Paint.Align.CENTER);
+            p.setTextSize(dp(10)); c.drawText("CAMERA", camCx, camCy - camR - dp(5), p);
             for (float[] def : buttonDefs) {
                 int id = (int)def[0]; float x = bx(def[1]), y = by(def[2]), r = br(def[3]);
                 boolean on = downButtons.contains(id) || (id == LOOK && lookMode);
@@ -815,7 +826,26 @@ public final class FiveplayActivity extends Activity {
         }
 
         private boolean inLookZone(float x, float y) {
-            return lookMode && x > getWidth() * .45f && y > u() * .18f && y < u() * .92f;
+            float h = u(), cx = getWidth() - h * .30f, cy = h * .34f;
+            if (Math.hypot(x - cx, y - cy) <= h * .14f) return false;
+            return lookMode && x > getWidth() * .45f && y > h * .18f && y < h * .92f;
+        }
+
+        private boolean inCameraStickZone(float x, float y) {
+            float h = u(), cx = getWidth() - h * .30f, cy = h * .34f;
+            return Math.hypot(x - cx, y - cy) <= h * .14f;
+        }
+
+        private void updateCameraStick(float x, float y) {
+            float h = u(), cx = getWidth() - h * .30f, cy = h * .34f;
+            float max = h * .085f, dx = x - cx, dy = y - cy;
+            float length = (float)Math.hypot(dx, dy);
+            if (length > max && length > 0) { dx *= max / length; dy *= max / length; }
+            cameraStickX = cx + dx; cameraStickY = cy + dy;
+            float density = getResources().getDisplayMetrics().density;
+            emitMouseDelta(dx / Math.max(1f, density) * 0.30f,
+                           dy / Math.max(1f, density) * 0.30f);
+            invalidate();
         }
 
         private void setButton(int id, boolean down) {
@@ -848,7 +878,7 @@ public final class FiveplayActivity extends Activity {
             setKeySource("joystick", null);
             if (lookPointer >= 0) forwardLookTouch(lookDownTime, SystemClock.uptimeMillis(),
                     MotionEvent.ACTION_CANCEL, lookX, lookY, 0);
-            pointerButtons.clear(); stickPointer = -1; lookPointer = -1;
+            pointerButtons.clear(); stickPointer = -1; lookPointer = -1; cameraStickPointer = -1;
             invalidate();
         }
 
@@ -861,6 +891,12 @@ public final class FiveplayActivity extends Activity {
                 float x = e.getX(idx), y = e.getY(idx);
                 int button = hitButton(x, y);
                 if (button != 0) { pointerButtons.put(pid, button); setButton(button, true); return true; }
+                if (cameraStickPointer < 0 && inCameraStickZone(x, y)) {
+                    cameraStickPointer = pid;
+                    cameraStickX = getWidth() - u() * .30f;
+                    cameraStickY = u() * .34f;
+                    invalidate(); return true;
+                }
                 if (stickPointer < 0 && inStickZone(x, y)) {
                     stickPointer = pid; stickCx = x; stickCy = y; stickX = x; stickY = y; updateStick(x, y); return true;
                 }
@@ -877,6 +913,7 @@ public final class FiveplayActivity extends Activity {
                 for (int i = 0; i < e.getPointerCount(); i++) {
                     int id = e.getPointerId(i); float x = e.getX(i), y = e.getY(i);
                     if (id == stickPointer) updateStick(x, y);
+                    else if (id == cameraStickPointer) updateCameraStick(x, y);
                     else if (id == lookPointer) {
                         float dx = x - lookX, dy = y - lookY;
                         if (!lookMoved && Math.hypot(x - lookStartX, y - lookStartY) >= dp(4)) lookMoved = true;
@@ -895,6 +932,7 @@ public final class FiveplayActivity extends Activity {
                 Integer button = pointerButtons.remove(pid);
                 if (button != null) setButton(button, false);
                 if (pid == stickPointer) { stickPointer = -1; setKeySource("joystick", null); }
+                if (pid == cameraStickPointer) { cameraStickPointer = -1; invalidate(); }
                 if (pid == lookPointer) {
                     forwardLookTouch(lookDownTime, e.getEventTime(), MotionEvent.ACTION_UP, x, y, e.getMetaState());
                     lookPointer = -1;
