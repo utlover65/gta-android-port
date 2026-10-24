@@ -31,6 +31,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
+import android.webkit.WebResourceResponse;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,6 +69,7 @@ public final class FiveplayActivity extends Activity {
     private boolean statusPinned;
     private boolean pageFinished;
     private boolean fallbackAttempted;
+    private boolean crossOriginIsolationAllowlistConfigured;
     private int pageProgress;
     private final Runnable startupTimeout = () -> {
         if (webView != null && !pageFinished && !fallbackAttempted
@@ -128,6 +140,19 @@ public final class FiveplayActivity extends Activity {
                 Toast.makeText(FiveplayActivity.this, "Downloads are disabled in this game wrapper", Toast.LENGTH_LONG).show());
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                // Android WebView needs an explicit response policy plus a narrowly scoped
+                // AndroidX WebKit allowlist before SharedArrayBuffer can be exposed. Only
+                // intercept top-level HTML navigations to the two configured game origins.
+                if (request.isForMainFrame()
+                        && "GET".equalsIgnoreCase(request.getMethod())
+                        && isIsolationTargetUrl(request.getUrl().toString())) {
+                    WebResourceResponse response = interceptMainDocumentForIsolation(request);
+                    if (response != null) return response;
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri uri = request.getUrl();
@@ -265,8 +290,182 @@ public final class FiveplayActivity extends Activity {
             Log.w(TAG, "Could not enable the Fiveplay QUIC hint", e);
         }
 
+        configureCrossOriginIsolationAllowlist();
         webView.loadUrl(START_URL);
         handler.postDelayed(startupTimeout, STARTUP_TIMEOUT_MS);
+    }
+
+    private boolean isIsolationTargetUrl(String url) {
+        return isFiveplayUrl(url) || isFallbackUrl(url);
+    }
+
+    private boolean isFallbackUrl(String url) {
+        if (url == null) return false;
+        try { return isFallbackHost(Uri.parse(url).getHost()); }
+        catch (RuntimeException ignored) { return false; }
+    }
+
+    /**
+     * Fetches just the top-level HTML document with normal TLS verification, then adds
+     * Document-Isolation-Policy to the response. All game scripts, WASM, workers and
+     * media continue to load normally from their original HTTPS URLs inside WebView.
+     * If the response is a redirect, error, non-HTML document, or exceeds the size cap,
+     * return null so WebView performs its ordinary network request instead.
+     */
+    private WebResourceResponse interceptMainDocumentForIsolation(WebResourceRequest request) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(request.getUrl().toString());
+            if (!"https".equalsIgnoreCase(url.getProtocol())) return null;
+
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(20000);
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept-Encoding", "identity");
+
+            Map<String, String> requestHeaders = request.getRequestHeaders();
+            for (Map.Entry<String, String> entry : requestHeaders.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if (key == null || value == null) continue;
+                String lower = key.toLowerCase(Locale.ROOT);
+                if (lower.equals("host") || lower.equals("connection")
+                        || lower.equals("content-length") || lower.equals("accept-encoding")
+                        || lower.equals("cookie") || lower.equals("cookie2")
+                        || lower.equals("transfer-encoding") || lower.equals("upgrade")
+                        || lower.equals("proxy-connection")) continue;
+                try { connection.setRequestProperty(key, value); }
+                catch (IllegalArgumentException ignored) { /* Skip restricted transport headers. */ }
+            }
+            String cookies = android.webkit.CookieManager.getInstance().getCookie(url.toString());
+            if (cookies != null && !cookies.isEmpty()) connection.setRequestProperty("Cookie", cookies);
+
+            int statusCode = connection.getResponseCode();
+            if (statusCode < 200 || statusCode >= 300) return null;
+
+            String contentType = connection.getContentType();
+            if (contentType == null) return null;
+            String lowerContentType = contentType.toLowerCase(Locale.ROOT);
+            if (!lowerContentType.startsWith("text/html")
+                    && !lowerContentType.startsWith("application/xhtml+xml")) return null;
+            String contentEncoding = connection.getContentEncoding();
+            if (contentEncoding != null && !contentEncoding.equalsIgnoreCase("identity")) return null;
+
+            InputStream input = connection.getInputStream();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int count;
+            int total = 0;
+            final int maxDocumentBytes = 8 * 1024 * 1024;
+            while ((count = input.read(buffer)) != -1) {
+                total += count;
+                if (total > maxDocumentBytes) {
+                    input.close();
+                    Log.w(TAG, "Main HTML document too large for isolation response interception; using normal WebView loading");
+                    return null;
+                }
+                output.write(buffer, 0, count);
+            }
+            input.close();
+            byte[] body = output.toByteArray();
+
+            Map<String, String> responseHeaders = new HashMap<>();
+            List<String> responseCookies = null;
+            Map<String, List<String>> rawHeaders = connection.getHeaderFields();
+            for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
+                String key = entry.getKey();
+                List<String> values = entry.getValue();
+                if (key == null || values == null || values.isEmpty()) continue;
+                String lower = key.toLowerCase(Locale.ROOT);
+                if (lower.equals("set-cookie")) {
+                    responseCookies = values;
+                    continue;
+                }
+                if (lower.equals("connection") || lower.equals("keep-alive")
+                        || lower.equals("proxy-authenticate") || lower.equals("proxy-authorization")
+                        || lower.equals("te") || lower.equals("trailer")
+                        || lower.equals("transfer-encoding") || lower.equals("upgrade")
+                        || lower.equals("content-encoding")) continue;
+                String joined = String.join(", ", values);
+                responseHeaders.put(key, joined);
+            }
+
+            // Preserve cookies set by the server; these are not forwarded as a combined
+            // Set-Cookie header because commas can be meaningful inside cookie attributes.
+            if (responseCookies != null) {
+                android.webkit.CookieManager cookieManager = android.webkit.CookieManager.getInstance();
+                for (String cookie : responseCookies) {
+                    if (cookie == null || cookie.isEmpty()) continue;
+                    CountDownLatch latch = new CountDownLatch(1);
+                    cookieManager.setCookie(url.toString(), cookie, ignored -> latch.countDown());
+                    try {
+                        if (!latch.await(1500, TimeUnit.MILLISECONDS)) {
+                            Log.w(TAG, "Timed out storing a cookie from the game HTML response");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                }
+                cookieManager.flush();
+            }
+
+            boolean hasDip = false;
+            for (String key : responseHeaders.keySet()) {
+                if (key.equalsIgnoreCase("Document-Isolation-Policy")) { hasDip = true; break; }
+            }
+            if (!hasDip) responseHeaders.put("Document-Isolation-Policy", "isolate-and-require-corp");
+            responseHeaders.put("Content-Length", Integer.toString(body.length));
+
+            String mimeType = contentType.split(";", 2)[0].trim();
+            String charset = "UTF-8";
+            int charsetAt = lowerContentType.indexOf("charset=");
+            if (charsetAt >= 0) {
+                String charsetValue = contentType.substring(charsetAt + 8).trim().split("[;\\s]", 2)[0]
+                        .replace("\"", "").replace("'", "");
+                if (!charsetValue.isEmpty()) charset = charsetValue;
+            }
+            String reason = connection.getResponseMessage();
+            if (reason == null || reason.trim().isEmpty()) reason = "OK";
+            Log.i(TAG, "Added Document-Isolation-Policy to top-level HTML from " + url.getHost()
+                    + "; status=" + statusCode + "; bytes=" + body.length);
+            return new WebResourceResponse(mimeType, charset, statusCode, reason,
+                    responseHeaders, new ByteArrayInputStream(body));
+        } catch (Exception error) {
+            Log.w(TAG, "Could not add Document-Isolation-Policy to the main document; using normal WebView loading", error);
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private void configureCrossOriginIsolationAllowlist() {
+        try {
+            if (!androidx.webkit.WebViewFeature.isFeatureSupported(
+                    androidx.webkit.WebViewFeature.CROSS_ORIGIN_ISOLATED_ALLOWLIST)) {
+                Log.w(TAG, "This WebView provider does not support the cross-origin isolated API allowlist; SharedArrayBuffer may remain unavailable");
+                crossOriginIsolationAllowlistConfigured = false;
+                return;
+            }
+            if (!androidx.webkit.WebViewFeature.isFeatureSupported(
+                    androidx.webkit.WebViewFeature.MULTI_PROFILE)) {
+                Log.w(TAG, "This WebView provider cannot expose a profile for cross-origin isolation allowlisting");
+                crossOriginIsolationAllowlistConfigured = false;
+                return;
+            }
+            androidx.webkit.Profile profile = androidx.webkit.WebViewCompat.getProfile(webView);
+            Set<String> trustedOrigins = new HashSet<>();
+            trustedOrigins.add("https://fiveplay.lol");
+            trustedOrigins.add("https://gta5-87g.pages.dev");
+            profile.setCrossOriginIsolatedAllowlist(trustedOrigins);
+            crossOriginIsolationAllowlistConfigured = true;
+            Log.i(TAG, "Cross-origin isolated APIs allowlisted only for the configured game origins");
+        } catch (RuntimeException error) {
+            crossOriginIsolationAllowlistConfigured = false;
+            Log.w(TAG, "Could not configure cross-origin API allowlist", error);
+        }
     }
 
     private boolean isFiveplayHost(String host) {
@@ -323,6 +522,7 @@ public final class FiveplayActivity extends Activity {
             String featureText = result == null ? "No page response yet" : result;
             String title = "WebView / Chromium: " + webViewVersion() + "\n\n" +
                     "Page loaded: " + pageFinished + "\n" +
+                    "Cross-origin API allowlist: " + crossOriginIsolationAllowlistConfigured + "\n" +
                     "Web feature report:\n" + featureText + "\n\n" +
                     "If WebGPU, SharedArrayBuffer, or crossOriginIsolated is false, this WebView may not be compatible with the game's browser runtime. This app does not install certificates or bypass TLS checks.";
             new android.app.AlertDialog.Builder(this)
