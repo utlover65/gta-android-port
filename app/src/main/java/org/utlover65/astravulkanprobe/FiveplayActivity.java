@@ -640,12 +640,24 @@ public final class FiveplayActivity extends Activity {
     }
 
     private void emitMouseDelta(float dx, float dy) {
-        if (webView == null || (Math.abs(dx) < 0.5f && Math.abs(dy) < 0.5f)) return;
-        // Dispatch on the pointer-lock target when available; bubbling lets document-level
-        // game listeners see it too. movementX/Y are explicitly supplied for pointer lock.
-        String js = "(function(){const t=document.pointerLockElement||document.querySelector('canvas')||document;" +
-                "const e=new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:innerWidth*.6,clientY:innerHeight*.5});" +
-                "try{Object.defineProperties(e,{movementX:{value:" + Math.round(dx) + "},movementY:{value:" + Math.round(dy) + "}})}catch(x){};t.dispatchEvent(e)})()";
+        if (webView == null) return;
+        if (Math.abs(dx) < 0.5f && Math.abs(dy) < 0.5f) return;
+
+        String js = "(function(){"
+                + "const dx=" + Math.round(dx) + ";"
+                + "const dy=" + Math.round(dy) + ";"
+                + "const t=document.pointerLockElement"
+                + "||document.querySelector('canvas')||document;"
+                + "const e=new MouseEvent('mousemove',{"
+                + "bubbles:true,cancelable:true,"
+                + "clientX:innerWidth*.6,clientY:innerHeight*.5"
+                + "});"
+                + "try{Object.defineProperties(e,{"
+                + "movementX:{value:dx},movementY:{value:dy}"
+                + "});}catch(x){}"
+                + "t.dispatchEvent(e);"
+                + "})();";
+
         webView.evaluateJavascript(js, null);
     }
 
