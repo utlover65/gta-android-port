@@ -559,6 +559,12 @@ public final class FiveplayActivity extends Activity {
             case KeyEvent.KEYCODE_C: return "c";
             case KeyEvent.KEYCODE_Q: return "q";
             case KeyEvent.KEYCODE_R: return "r";
+            case KeyEvent.KEYCODE_ALT_LEFT: return "Alt";
+            case KeyEvent.KEYCODE_TAB: return "Tab";
+            case KeyEvent.KEYCODE_M: return "m";
+            case KeyEvent.KEYCODE_G: return "g";
+            case KeyEvent.KEYCODE_CAPS_LOCK: return "CapsLock";
+            case KeyEvent.KEYCODE_CTRL_LEFT: return "Control";
             default: return "";
         }
     }
@@ -581,6 +587,12 @@ public final class FiveplayActivity extends Activity {
             case KeyEvent.KEYCODE_C: return "KeyC";
             case KeyEvent.KEYCODE_Q: return "KeyQ";
             case KeyEvent.KEYCODE_R: return "KeyR";
+            case KeyEvent.KEYCODE_ALT_LEFT: return "AltLeft";
+            case KeyEvent.KEYCODE_TAB: return "Tab";
+            case KeyEvent.KEYCODE_M: return "KeyM";
+            case KeyEvent.KEYCODE_G: return "KeyG";
+            case KeyEvent.KEYCODE_CAPS_LOCK: return "CapsLock";
+            case KeyEvent.KEYCODE_CTRL_LEFT: return "ControlLeft";
             default: return "";
         }
     }
@@ -598,7 +610,8 @@ public final class FiveplayActivity extends Activity {
                 + "?document.activeElement:(document.pointerLockElement||document.querySelector('canvas')||document);"
                 + "try{target.focus({preventScroll:true})}catch(e){}"
                 + "const init={key:key,code:code,bubbles:true,cancelable:true,composed:true,repeat:false,"
-                + "shiftKey:key==='Shift'||code==='ShiftLeft'||code==='ShiftRight'};"
+                + "shiftKey:key==='Shift'||code==='ShiftLeft'||code==='ShiftRight',"
+                + "altKey:key==='Alt'||code==='AltLeft',ctrlKey:key==='Control'||code==='ControlLeft'};"
                 + "target.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',init));"
                 + "if(target!==document)document.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',init));"
                 + "})();";
@@ -617,11 +630,30 @@ public final class FiveplayActivity extends Activity {
         for (int code : next) if (emittedKeys.add(code)) dispatchKey(code, true);
     }
 
+    private void forwardLookTouch(long downTime, long eventTime, int action,
+                                  float x, float y, int metaState) {
+        if (webView == null) return;
+        // Overlay and WebView fill the same FrameLayout, so coordinates are aligned.
+        MotionEvent touch = MotionEvent.obtain(downTime, eventTime, action, x, y, metaState);
+        try { webView.dispatchTouchEvent(touch); }
+        finally { touch.recycle(); }
+    }
+
     private void emitMouseDelta(float dx, float dy) {
         if (webView == null || (Math.abs(dx) < 0.5f && Math.abs(dy) < 0.5f)) return;
+        // Dispatch on the pointer-lock target when available; bubbling lets document-level
+        // game listeners see it too. movementX/Y are explicitly supplied for pointer lock.
         String js = "(function(){const t=document.pointerLockElement||document.querySelector('canvas')||document;" +
                 "const e=new MouseEvent('mousemove',{bubbles:true,cancelable:true,clientX:innerWidth*.6,clientY:innerHeight*.5});" +
-                "Object.defineProperties(e,{movementX:{value:" + Math.round(dx) + "},movementY:{value:" + Math.round(dy) + "}});t.dispatchEvent(e)})()";
+                "try{Object.defineProperties(e,{movementX:{value:" + Math.round(dx) + "},movementY:{value:" + Math.round(dy) + "}})}catch(x){};t.dispatchEvent(e)})()";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private void emitMouseWheel(int direction) {
+        if (webView == null) return;
+        String js = "(function(){const t=document.pointerLockElement||document.querySelector('canvas')||document;" +
+                "t.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:" +
+                (direction < 0 ? "-120" : "120") + ",deltaMode:0}))})()";
         webView.evaluateJavascript(js, null);
     }
 
@@ -635,9 +667,17 @@ public final class FiveplayActivity extends Activity {
             case TouchOverlay.CAMERA: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_V) : null); break;
             case TouchOverlay.PAUSE: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_ESCAPE) : null); break;
             case TouchOverlay.PHONE: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_DPAD_UP) : null); break;
-            case TouchOverlay.CROUCH: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_C) : null); break;
-            case TouchOverlay.WEAPON: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_Q) : null); break;
+            case TouchOverlay.LOOK_BEHIND: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_C) : null); break;
+            case TouchOverlay.WEAPON: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_TAB) : null); break;
             case TouchOverlay.RELOAD: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_R) : null); break;
+            case TouchOverlay.CHAR_SWITCH: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_ALT_LEFT) : null); break;
+            case TouchOverlay.MAP: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_M) : null); break;
+            case TouchOverlay.COVER: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_Q) : null); break;
+            case TouchOverlay.SPECIAL: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_CAPS_LOCK) : null); break;
+            case TouchOverlay.THROW: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_G) : null); break;
+            case TouchOverlay.STEALTH: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_CTRL_LEFT) : null); break;
+            case TouchOverlay.PREV_WEAPON: if (down) emitMouseWheel(-1); break;
+            case TouchOverlay.NEXT_WEAPON: if (down) emitMouseWheel(1); break;
             case TouchOverlay.AIM: emitMouseButton(2, down); break;
             case TouchOverlay.FIRE: emitMouseButton(0, down); break;
             case TouchOverlay.LOOK: if (down && overlay != null) { overlay.lookMode = !overlay.lookMode; overlay.invalidate(); } break;
@@ -696,14 +736,19 @@ public final class FiveplayActivity extends Activity {
     private final class TouchOverlay extends View {
         static final int JUMP = 1, ENTER = 2, INTERACT = 3, SPRINT = 4,
                 CAMERA = 5, PAUSE = 6, LOOK = 7, PHONE = 8, AIM = 9, FIRE = 10,
-                CROUCH = 11, WEAPON = 12, RELOAD = 13;
+                LOOK_BEHIND = 11, WEAPON = 12, RELOAD = 13, CHAR_SWITCH = 14,
+                MAP = 15, COVER = 16, SPECIAL = 17, THROW = 18, STEALTH = 19,
+                PREV_WEAPON = 20, NEXT_WEAPON = 21;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Map<Integer, Integer> pointerButtons = new HashMap<>();
         private final Set<Integer> downButtons = new HashSet<>();
         private int stickPointer = -1, lookPointer = -1;
         private float stickCx, stickCy, stickX, stickY, lookX, lookY;
         private float unit;
-        boolean lookMode;
+        boolean lookMode = true;
+        boolean lookMoved;
+        float lookStartX, lookStartY;
+        long lookDownTime;
 
         TouchOverlay() { super(FiveplayActivity.this); setLayerType(View.LAYER_TYPE_SOFTWARE, null); setClickable(true); setFocusable(false); }
         private float u() { return Math.max(1f, getHeight()); }
@@ -716,9 +761,13 @@ public final class FiveplayActivity extends Activity {
                 {INTERACT, .145f, .32f, .050f}, {SPRINT, .425f, .72f, .051f},
                 {CAMERA, .425f, .57f, .047f}, {PAUSE, .105f, .13f, .045f},
                 {LOOK, .285f, .13f, .045f}, {PHONE, .105f, .25f, .043f},
-                {AIM, .875f, .68f, .055f}, {FIRE, .875f, .84f, .061f},
-                {CROUCH, .735f, .84f, .045f}, {WEAPON, .735f, .68f, .045f},
-                {RELOAD, .875f, .51f, .043f}
+                {AIM, .875f, .68f, .052f}, {FIRE, .875f, .84f, .058f},
+                {LOOK_BEHIND, .735f, .84f, .040f}, {WEAPON, .735f, .68f, .042f},
+                {RELOAD, .875f, .51f, .040f},
+                {CHAR_SWITCH, .285f, .25f, .038f}, {MAP, .285f, .36f, .038f},
+                {COVER, .285f, .47f, .038f}, {SPECIAL, .285f, .58f, .038f},
+                {THROW, .285f, .69f, .038f}, {STEALTH, .285f, .80f, .038f},
+                {PREV_WEAPON, .55f, .34f, .035f}, {NEXT_WEAPON, .55f, .46f, .035f}
         };
 
         @Override protected void onDraw(Canvas c) {
@@ -745,8 +794,11 @@ public final class FiveplayActivity extends Activity {
                 case JUMP: return "JUMP"; case ENTER: return "ENTER"; case INTERACT: return "USE";
                 case SPRINT: return "RUN"; case CAMERA: return "CAM"; case PAUSE: return "ESC";
                 case PHONE: return "PHONE"; case AIM: return "AIM"; case FIRE: return "FIRE";
-                case CROUCH: return "CROUCH"; case WEAPON: return "WEAPON"; case RELOAD: return "RELOAD";
-                default: return lookMode ? "LOOK ON" : "LOOK";
+                case LOOK_BEHIND: return "BACK"; case WEAPON: return "WHEEL"; case RELOAD: return "RELOAD";
+                case CHAR_SWITCH: return "SWITCH"; case MAP: return "MAP"; case COVER: return "COVER";
+                case SPECIAL: return "SPECIAL"; case THROW: return "THROW"; case STEALTH: return "STEALTH";
+                case PREV_WEAPON: return "PREV"; case NEXT_WEAPON: return "NEXT";
+                default: return lookMode ? "LOOK ON" : "LOOK OFF";
             }
         }
 
@@ -794,6 +846,8 @@ public final class FiveplayActivity extends Activity {
         private void clearControls() {
             for (int id : new ArrayList<>(downButtons)) setButton(id, false);
             setKeySource("joystick", null);
+            if (lookPointer >= 0) forwardLookTouch(lookDownTime, SystemClock.uptimeMillis(),
+                    MotionEvent.ACTION_CANCEL, lookX, lookY, 0);
             pointerButtons.clear(); stickPointer = -1; lookPointer = -1;
             invalidate();
         }
@@ -810,8 +864,13 @@ public final class FiveplayActivity extends Activity {
                 if (stickPointer < 0 && inStickZone(x, y)) {
                     stickPointer = pid; stickCx = x; stickCy = y; stickX = x; stickY = y; updateStick(x, y); return true;
                 }
-                if (lookPointer < 0 && inLookZone(x, y)) { lookPointer = pid; lookX = x; lookY = y; return true; }
-                // Let ordinary world taps pass through to the WebView so its launch UI / pointer lock can receive them.
+                if (lookPointer < 0 && inLookZone(x, y)) {
+                    lookPointer = pid; lookX = lookStartX = x; lookY = lookStartY = y;
+                    lookMoved = false; lookDownTime = e.getEventTime();
+                    forwardLookTouch(lookDownTime, e.getEventTime(), MotionEvent.ACTION_DOWN, x, y, e.getMetaState());
+                    return true;
+                }
+                // Pass unrelated taps through when no overlay gesture currently owns the surface.
                 return stickPointer >= 0 || lookPointer >= 0 || !pointerButtons.isEmpty();
             }
             if (action == MotionEvent.ACTION_MOVE) {
@@ -819,18 +878,27 @@ public final class FiveplayActivity extends Activity {
                     int id = e.getPointerId(i); float x = e.getX(i), y = e.getY(i);
                     if (id == stickPointer) updateStick(x, y);
                     else if (id == lookPointer) {
-                        float density = getResources().getDisplayMetrics().density;
-                        emitMouseDelta((x - lookX) / density * 1.5f, (y - lookY) / density * 1.5f);
+                        float dx = x - lookX, dy = y - lookY;
+                        if (!lookMoved && Math.hypot(x - lookStartX, y - lookStartY) >= dp(4)) lookMoved = true;
+                        forwardLookTouch(lookDownTime, e.getEventTime(), MotionEvent.ACTION_MOVE, x, y, e.getMetaState());
+                        if (lookMoved && lookMode) {
+                            float density = getResources().getDisplayMetrics().density;
+                            emitMouseDelta(dx / density * 2.0f, dy / density * 2.0f);
+                        }
                         lookX = x; lookY = y;
                     }
                 }
                 return stickPointer >= 0 || lookPointer >= 0 || !pointerButtons.isEmpty();
             }
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+                float x = e.getX(idx), y = e.getY(idx);
                 Integer button = pointerButtons.remove(pid);
                 if (button != null) setButton(button, false);
                 if (pid == stickPointer) { stickPointer = -1; setKeySource("joystick", null); }
-                if (pid == lookPointer) lookPointer = -1;
+                if (pid == lookPointer) {
+                    forwardLookTouch(lookDownTime, e.getEventTime(), MotionEvent.ACTION_UP, x, y, e.getMetaState());
+                    lookPointer = -1;
+                }
                 return true;
             }
             return stickPointer >= 0 || lookPointer >= 0 || !pointerButtons.isEmpty();
