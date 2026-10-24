@@ -555,6 +555,10 @@ public final class FiveplayActivity extends Activity {
             case KeyEvent.KEYCODE_V: return "v";
             case KeyEvent.KEYCODE_ESCAPE: return "Escape";
             case KeyEvent.KEYCODE_ENTER: return "Enter";
+            case KeyEvent.KEYCODE_DPAD_UP: return "ArrowUp";
+            case KeyEvent.KEYCODE_C: return "c";
+            case KeyEvent.KEYCODE_Q: return "q";
+            case KeyEvent.KEYCODE_R: return "r";
             default: return "";
         }
     }
@@ -573,6 +577,10 @@ public final class FiveplayActivity extends Activity {
             case KeyEvent.KEYCODE_V: return "KeyV";
             case KeyEvent.KEYCODE_ESCAPE: return "Escape";
             case KeyEvent.KEYCODE_ENTER: return "Enter";
+            case KeyEvent.KEYCODE_DPAD_UP: return "ArrowUp";
+            case KeyEvent.KEYCODE_C: return "KeyC";
+            case KeyEvent.KEYCODE_Q: return "KeyQ";
+            case KeyEvent.KEYCODE_R: return "KeyR";
             default: return "";
         }
     }
@@ -626,8 +634,28 @@ public final class FiveplayActivity extends Activity {
             case TouchOverlay.SPRINT: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_SHIFT_LEFT) : null); break;
             case TouchOverlay.CAMERA: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_V) : null); break;
             case TouchOverlay.PAUSE: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_ESCAPE) : null); break;
+            case TouchOverlay.PHONE: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_DPAD_UP) : null); break;
+            case TouchOverlay.CROUCH: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_C) : null); break;
+            case TouchOverlay.WEAPON: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_Q) : null); break;
+            case TouchOverlay.RELOAD: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_R) : null); break;
+            case TouchOverlay.AIM: emitMouseButton(2, down); break;
+            case TouchOverlay.FIRE: emitMouseButton(0, down); break;
             case TouchOverlay.LOOK: if (down && overlay != null) { overlay.lookMode = !overlay.lookMode; overlay.invalidate(); } break;
         }
+    }
+
+    private void emitMouseButton(int button, boolean down) {
+        if (webView == null) return;
+        String js = "(function(){const t=document.pointerLockElement||document.querySelector('canvas')||document;" +
+                "const b=" + button + ",d=" + (down ? "true" : "false") + ";" +
+                "const init={bubbles:true,cancelable:true,button:b,buttons:d?(b===0?1:2):0," +
+                "clientX:innerWidth*.6,clientY:innerHeight*.5};" +
+                "t.dispatchEvent(new MouseEvent(d?'mousedown':'mouseup',init));" +
+                "t.dispatchEvent(new MouseEvent(d?'pointerdown':'pointerup',{bubbles:true,cancelable:true," +
+                "pointerId:1,pointerType:'mouse',button:b,buttons:init.buttons,clientX:init.clientX,clientY:init.clientY}));" +
+                "if(!d)t.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,button:b,buttons:0," +
+                "clientX:init.clientX,clientY:init.clientY}));})();";
+        webView.evaluateJavascript(js, null);
     }
 
     private static Set<Integer> setOf(int... codes) {
@@ -667,7 +695,8 @@ public final class FiveplayActivity extends Activity {
 
     private final class TouchOverlay extends View {
         static final int JUMP = 1, ENTER = 2, INTERACT = 3, SPRINT = 4,
-                CAMERA = 5, PAUSE = 6, LOOK = 7;
+                CAMERA = 5, PAUSE = 6, LOOK = 7, PHONE = 8, AIM = 9, FIRE = 10,
+                CROUCH = 11, WEAPON = 12, RELOAD = 13;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Map<Integer, Integer> pointerButtons = new HashMap<>();
         private final Set<Integer> downButtons = new HashSet<>();
@@ -686,7 +715,10 @@ public final class FiveplayActivity extends Activity {
                 {JUMP, .145f, .67f, .061f}, {ENTER, .145f, .49f, .052f},
                 {INTERACT, .145f, .32f, .050f}, {SPRINT, .425f, .72f, .051f},
                 {CAMERA, .425f, .57f, .047f}, {PAUSE, .105f, .13f, .045f},
-                {LOOK, .285f, .13f, .045f}
+                {LOOK, .285f, .13f, .045f}, {PHONE, .105f, .25f, .043f},
+                {AIM, .875f, .68f, .055f}, {FIRE, .875f, .84f, .061f},
+                {CROUCH, .735f, .84f, .045f}, {WEAPON, .735f, .68f, .045f},
+                {RELOAD, .875f, .51f, .043f}
         };
 
         @Override protected void onDraw(Canvas c) {
@@ -712,6 +744,8 @@ public final class FiveplayActivity extends Activity {
             switch (id) {
                 case JUMP: return "JUMP"; case ENTER: return "ENTER"; case INTERACT: return "USE";
                 case SPRINT: return "RUN"; case CAMERA: return "CAM"; case PAUSE: return "ESC";
+                case PHONE: return "PHONE"; case AIM: return "AIM"; case FIRE: return "FIRE";
+                case CROUCH: return "CROUCH"; case WEAPON: return "WEAPON"; case RELOAD: return "RELOAD";
                 default: return lookMode ? "LOOK ON" : "LOOK";
             }
         }
