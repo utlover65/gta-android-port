@@ -165,18 +165,6 @@ public final class FiveplayActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(
                     WebView view, WebResourceRequest request) {
-
-                if (request.isForMainFrame()
-                        && "GET".equalsIgnoreCase(request.getMethod())
-                        && isIsolationTargetUrl(request.getUrl().toString())) {
-                    WebResourceResponse response =
-                            interceptMainDocumentForIsolation(request);
-
-                    if (response != null) {
-                        return response;
-                    }
-                }
-
                 return super.shouldInterceptRequest(view, request);
             }
 
@@ -650,8 +638,7 @@ public final class FiveplayActivity extends Activity {
 
             Set<String> trustedOrigins = new HashSet<>();
             trustedOrigins.add("https://fiveplay.lol");
-            trustedOrigins.add("https://gta5-87g.pages.dev");
-
+            trustedOrigins.add("https://playgta5.pro");
             profile.setCrossOriginIsolatedAllowlist(trustedOrigins);
             crossOriginIsolationAllowlistConfigured = true;
 
@@ -671,7 +658,7 @@ public final class FiveplayActivity extends Activity {
     }
 
     private boolean isFallbackHost(String host) {
-        return host != null && host.equalsIgnoreCase("gta5-87g.pages.dev");
+        return host != null && host.equalsIgnoreCase("playgta5.pro");
     }
 
     private boolean isFiveplayUrl(String url) {
