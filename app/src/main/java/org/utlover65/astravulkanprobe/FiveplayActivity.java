@@ -678,7 +678,8 @@ public final class FiveplayActivity extends Activity {
         String src = "button:" + buttonId;
         switch (buttonId) {
             case TouchOverlay.JUMP: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_SPACE) : null); break;
-            case TouchOverlay.ENTER: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_F) : null); break;
+            case TouchOverlay.ENTER: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_ENTER) : null); break;
+            case TouchOverlay.VEHICLE: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_F) : null); break;
             case TouchOverlay.INTERACT: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_E) : null); break;
             case TouchOverlay.SPRINT: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_SHIFT_LEFT) : null); break;
             case TouchOverlay.CAMERA: setKeySource(src, down ? setOf(KeyEvent.KEYCODE_V) : null); break;
@@ -755,7 +756,7 @@ public final class FiveplayActivity extends Activity {
                 CAMERA = 5, PAUSE = 6, LOOK = 7, PHONE = 8, AIM = 9, FIRE = 10,
                 LOOK_BEHIND = 11, WEAPON = 12, RELOAD = 13, CHAR_SWITCH = 14,
                 MAP = 15, COVER = 16, SPECIAL = 17, THROW = 18, STEALTH = 19,
-                PREV_WEAPON = 20, NEXT_WEAPON = 21;
+                PREV_WEAPON = 20, NEXT_WEAPON = 21, VEHICLE = 22;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Map<Integer, Integer> pointerButtons = new HashMap<>();
         private final Set<Integer> downButtons = new HashSet<>();
@@ -776,6 +777,7 @@ public final class FiveplayActivity extends Activity {
 
         private final float[][] buttonDefs = {
                 {JUMP, .145f, .67f, .061f}, {ENTER, .145f, .49f, .052f},
+                {VEHICLE, .205f, .42f, .038f},
                 {INTERACT, .145f, .32f, .050f}, {SPRINT, .425f, .72f, .051f},
                 {CAMERA, .425f, .57f, .047f}, {PAUSE, .105f, .13f, .045f},
                 {LOOK, .285f, .13f, .045f}, {PHONE, .105f, .25f, .043f},
@@ -819,7 +821,7 @@ public final class FiveplayActivity extends Activity {
 
         private String label(int id) {
             switch (id) {
-                case JUMP: return "JUMP"; case ENTER: return "ENTER"; case INTERACT: return "USE";
+                case JUMP: return "JUMP"; case ENTER: return "ENTER"; case VEHICLE: return "VEHICLE"; case INTERACT: return "USE";
                 case SPRINT: return "RUN"; case CAMERA: return "CAM"; case PAUSE: return "ESC";
                 case PHONE: return "PHONE"; case AIM: return "AIM"; case FIRE: return "FIRE";
                 case LOOK_BEHIND: return "BACK"; case WEAPON: return "WHEEL"; case RELOAD: return "RELOAD";
