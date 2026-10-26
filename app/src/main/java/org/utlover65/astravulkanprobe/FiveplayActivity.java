@@ -231,6 +231,8 @@ public final class FiveplayActivity extends Activity {
                 if (request.isForMainFrame()) {
                     Uri uri = request.getUrl();
                     String host = uri.getHost();
+                    Log.i(TAG, "Main-frame request: " + uri
+                            + "; method=" + request.getMethod());
 
                     boolean trustedHost = host != null && (
                             host.equalsIgnoreCase("fiveplay.lol")
@@ -240,11 +242,14 @@ public final class FiveplayActivity extends Activity {
                     );
 
                     if ("https".equalsIgnoreCase(uri.getScheme()) && trustedHost) {
+                        Log.i(TAG, "Trying isolation interception for " + uri);
                         WebResourceResponse response =
                                 interceptMainDocumentForIsolation(request);
                         if (response != null) {
+                            Log.i(TAG, "Isolation interception returned a custom response");
                             return response;
                         }
+                        Log.w(TAG, "Isolation interception returned null; using normal WebView request");
                     }
                 }
 
