@@ -60,7 +60,7 @@ import java.util.Set;
 public final class FiveplayActivity extends Activity {
     private static final String TAG = "WebGamePort";
     private static final String START_URL = "https://fiveplay.lol/";
-    private static final String FALLBACK_URL = "https://cdn.playgta5.pro/index.html?mode=story&cfg=1_0-120_1-0.75_3-american_8-0_9-0_g-0_h-0_i-0_j-0_k-0_l-0_m-0.25_n-0_o-0_p-0.25_q-0_r-0_s-0_t-0_u-0_v-0_w-0_x-0_y-200_z-0_10-0_11-0_12-0_13-0";
+    private static final String FALLBACK_URL = "https://playgta5.pro/play?mode=story&cfg=1_0-120_1-0.75_3-american_8-0_9-0_g-0_h-0_i-0_j-0_k-0_l-0_m-0.25_n-0_o-0_p-0.25_q-0_r-0_s-0_t-0_u-0_v-0_w-0_x-0_y-200_z-0_10-0_11-0_12-0_13-0";
     private static final long STARTUP_TIMEOUT_MS = 15_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -228,6 +228,26 @@ public final class FiveplayActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(
                     WebView view, WebResourceRequest request) {
+                if (request.isForMainFrame()) {
+                    Uri uri = request.getUrl();
+                    String host = uri.getHost();
+
+                    boolean trustedHost = host != null && (
+                            host.equalsIgnoreCase("fiveplay.lol")
+                            || host.toLowerCase(Locale.ROOT).endsWith(".fiveplay.lol")
+                            || host.equalsIgnoreCase("playgta5.pro")
+                            || host.toLowerCase(Locale.ROOT).endsWith(".playgta5.pro")
+                    );
+
+                    if ("https".equalsIgnoreCase(uri.getScheme()) && trustedHost) {
+                        WebResourceResponse response =
+                                interceptMainDocumentForIsolation(request);
+                        if (response != null) {
+                            return response;
+                        }
+                    }
+                }
+
                 return super.shouldInterceptRequest(view, request);
             }
 
