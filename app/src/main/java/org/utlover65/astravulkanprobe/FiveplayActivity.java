@@ -1,4 +1,7 @@
 package org.utlover65.astravulkanprobe;
+import android.webkit.CookieManager;
+import android.os.Environment;
+import android.app.DownloadManager;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -153,13 +156,73 @@ public final class FiveplayActivity extends Activity {
             }
         });
 
-        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) ->
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            String scheme = uri.getScheme();
+
+            boolean trustedHost = host != null && (
+                    host.equalsIgnoreCase("fiveplay.lol")
+                    || host.toLowerCase(java.util.Locale.ROOT).endsWith(".fiveplay.lol")
+                    || host.equalsIgnoreCase("playgta5.pro")
+                    || host.toLowerCase(java.util.Locale.ROOT).endsWith(".playgta5.pro")
+            );
+
+            if (!"https".equalsIgnoreCase(scheme) || !trustedHost) {
                 Toast.makeText(
                         FiveplayActivity.this,
-                        "Downloads are disabled in this game wrapper",
+                        "Blocked download from an untrusted URL",
                         Toast.LENGTH_LONG
-                ).show()
-        );
+                ).show();
+                return;
+            }
+
+            try {
+                String fileName = android.webkit.URLUtil.guessFileName(
+                        url, contentDisposition, mimeType);
+                DownloadManager.Request download = new DownloadManager.Request(uri);
+                download.setTitle(fileName);
+                download.setDescription("Downloading game file");
+                if (mimeType != null) {
+                    download.setMimeType(mimeType);
+                }
+                download.setNotificationVisibility(
+                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                download.setAllowedOverMetered(true);
+                download.setAllowedOverRoaming(false);
+                download.setDestinationInExternalPublicDir(
+                        Environment.DIRECTORY_DOWNLOADS, fileName);
+
+                if (userAgent != null && !userAgent.isEmpty()) {
+                    download.addRequestHeader("User-Agent", userAgent);
+                }
+
+                String cookies = CookieManager.getInstance().getCookie(url);
+                if (cookies != null && !cookies.isEmpty()) {
+                    download.addRequestHeader("Cookie", cookies);
+                }
+
+                DownloadManager manager = (DownloadManager)
+                        getSystemService(DOWNLOAD_SERVICE);
+                if (manager == null) {
+                    throw new IllegalStateException("Android DownloadManager unavailable");
+                }
+                manager.enqueue(download);
+
+                Toast.makeText(
+                        FiveplayActivity.this,
+                        "Download started: " + fileName,
+                        Toast.LENGTH_LONG
+                ).show();
+            } catch (Exception e) {
+                Log.e(TAG, "Could not start download", e);
+                Toast.makeText(
+                        FiveplayActivity.this,
+                        "Download failed to start: " + e.getMessage(),
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+        });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
