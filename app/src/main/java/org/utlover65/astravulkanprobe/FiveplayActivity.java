@@ -1,5 +1,9 @@
 package org.utlover65.astravulkanprobe;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
+import android.content.ContentValues;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.os.Environment;
 import android.app.DownloadManager;
 
@@ -39,6 +43,9 @@ import android.webkit.WebResourceResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Collections;
@@ -52,6 +59,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Full-screen Chromium-backed Android WebView with a virtual GTA-style control overlay.
@@ -62,6 +70,7 @@ public final class FiveplayActivity extends Activity {
     private static final String START_URL = "https://fiveplay.lol/";
     private static final String FALLBACK_URL = "https://playgta5.pro/play?mode=story&cfg=1_0-120_1-0.75_3-american_8-0_9-0_g-0_h-0_i-0_j-0_k-0_l-0_m-0.25_n-0_o-0_p-0.25_q-0_r-0_s-0_t-0_u-0_v-0_w-0_x-0_y-200_z-0_10-0_11-0_12-0_13-0";
     private static final long STARTUP_TIMEOUT_MS = 15_000L;
+    private static final int MAX_BLOB_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, Set<Integer>> keySources = new HashMap<>();
@@ -73,6 +82,8 @@ public final class FiveplayActivity extends Activity {
     private boolean pageFinished;
     private boolean fallbackAttempted;
     private boolean crossOriginIsolationAllowlistConfigured;
+    private final Object blobDownloadLock = new Object();
+    private String pendingBlobDownloadToken;
     private int pageProgress;
 
     private final Runnable startupTimeout = () -> {
@@ -92,6 +103,8 @@ public final class FiveplayActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
 
         webView = new WebView(this);
+        // Bridge accepts only a one-time token issued for a trusted blob download.
+        webView.addJavascriptInterface(new BlobDownloadBridge(), "AndroidBlobDownloads");
         webView.setBackgroundColor(Color.BLACK);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setFocusable(true);
@@ -160,6 +173,12 @@ public final class FiveplayActivity extends Activity {
             Uri uri = Uri.parse(url);
             String host = uri.getHost();
             String scheme = uri.getScheme();
+
+            // The diagnostics page creates a blob: URL; DownloadManager cannot fetch it.
+            if ("blob".equalsIgnoreCase(scheme) && isTrustedBlobUrl(url)) {
+                startTrustedBlobDownload(url, mimeType);
+                return;
+            }
 
             boolean trustedHost = host != null && (
                     host.equalsIgnoreCase("fiveplay.lol")
@@ -471,6 +490,178 @@ public final class FiveplayActivity extends Activity {
         configureCrossOriginIsolationAllowlist();
         webView.loadUrl(START_URL);
         handler.postDelayed(startupTimeout, STARTUP_TIMEOUT_MS);
+    }
+
+    private boolean isTrustedBlobUrl(String url) {
+        if (url == null) return false;
+        return url.startsWith("blob:https://fiveplay.lol/")
+                || url.startsWith("blob:https://playgta5.pro/")
+                || url.startsWith("blob:https://cdn.playgta5.pro/");
+    }
+
+    private boolean isTrustedGameHost(String host) {
+        return isFiveplayHost(host) || isFallbackHost(host);
+    }
+
+    private void startTrustedBlobDownload(String blobUrl, String fallbackMimeType) {
+        String currentUrl = webView == null ? null : webView.getUrl();
+        String currentHost = null;
+        try {
+            currentHost = currentUrl == null ? null : Uri.parse(currentUrl).getHost();
+        } catch (RuntimeException ignored) {
+        }
+
+        if (!isTrustedGameHost(currentHost) || !isTrustedBlobUrl(blobUrl)) {
+            Log.w(TAG, "Rejected blob download because page or blob origin is not trusted");
+            Toast.makeText(this, "Blocked blob download origin", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        String token = UUID.randomUUID().toString();
+        synchronized (blobDownloadLock) {
+            pendingBlobDownloadToken = token;
+        }
+
+        String quotedUrl = JSONObject.quote(blobUrl);
+        String quotedToken = JSONObject.quote(token);
+        String quotedMime = JSONObject.quote(
+                fallbackMimeType == null || fallbackMimeType.trim().isEmpty()
+                        ? "text/plain" : fallbackMimeType);
+        String script = "(async function(){"
+                + "const token=" + quotedToken + ";"
+                + "try{"
+                + "const url=" + quotedUrl + ";"
+                + "const a=Array.from(document.querySelectorAll('a')).find(x=>x.href===url);"
+                + "const name=(a&&a.download)||'gta-diagnostics-from-apk.txt';"
+                + "const response=await fetch(url);"
+                + "if(!response.ok)throw new Error('Blob read failed: '+response.status);"
+                + "const blob=await response.blob();"
+                + "if(blob.size>" + MAX_BLOB_DOWNLOAD_BYTES + ")"
+                + "throw new Error('Blob exceeds 10 MiB safety limit');"
+                + "const dataUrl=await new Promise((resolve,reject)=>{"
+                + "const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));"
+                + "reader.onerror=()=>reject(new Error('Could not read diagnostic blob'));"
+                + "reader.readAsDataURL(blob);});"
+                + "const comma=dataUrl.indexOf(',');"
+                + "if(comma<0)throw new Error('Invalid blob encoding');"
+                + "window.AndroidBlobDownloads.save(token,name,blob.type||" + quotedMime
+                + ",dataUrl.slice(comma+1));"
+                + "}catch(error){window.AndroidBlobDownloads.fail(token,"
+                + "String(error&&error.message||error));}"
+                + "})();";
+
+        Log.i(TAG, "Handling trusted blob download using the WebView renderer");
+        webView.evaluateJavascript(script, null);
+    }
+
+    private final class BlobDownloadBridge {
+        @JavascriptInterface
+        public void save(String token, String fileName, String mimeType, String encodedData) {
+            synchronized (blobDownloadLock) {
+                if (token == null || !token.equals(pendingBlobDownloadToken)) {
+                    Log.w(TAG, "Ignored blob save without a valid one-time token");
+                    return;
+                }
+                pendingBlobDownloadToken = null;
+            }
+
+            try {
+                if (encodedData == null
+                        || encodedData.length() > ((MAX_BLOB_DOWNLOAD_BYTES + 2) / 3) * 4 + 16) {
+                    throw new IllegalArgumentException("Blob is empty or exceeds the safety limit");
+                }
+
+                byte[] bytes = Base64.decode(encodedData, Base64.DEFAULT);
+                if (bytes.length > MAX_BLOB_DOWNLOAD_BYTES) {
+                    throw new IllegalArgumentException("Blob exceeds 10 MiB safety limit");
+                }
+
+                String safeName = sanitizeDownloadName(fileName);
+                String safeMime = mimeType == null || mimeType.trim().isEmpty()
+                        ? "text/plain" : mimeType.split(";", 2)[0].trim();
+                Uri savedUri = persistBlobDownload(safeName, safeMime, bytes);
+
+                Log.i(TAG, "Saved trusted blob download: " + safeName
+                        + "; bytes=" + bytes.length + "; uri=" + savedUri);
+                runOnUiThread(() -> Toast.makeText(
+                        FiveplayActivity.this,
+                        "Saved to Downloads: " + safeName,
+                        Toast.LENGTH_LONG).show());
+            } catch (Exception error) {
+                Log.e(TAG, "Could not save trusted blob download", error);
+                runOnUiThread(() -> Toast.makeText(
+                        FiveplayActivity.this,
+                        "Could not save download: " + error.getMessage(),
+                        Toast.LENGTH_LONG).show());
+            }
+        }
+
+        @JavascriptInterface
+        public void fail(String token, String message) {
+            synchronized (blobDownloadLock) {
+                if (token == null || !token.equals(pendingBlobDownloadToken)) return;
+                pendingBlobDownloadToken = null;
+            }
+            Log.w(TAG, "Trusted blob download failed: " + message);
+            runOnUiThread(() -> Toast.makeText(
+                    FiveplayActivity.this,
+                    "Download failed: " + message,
+                    Toast.LENGTH_LONG).show());
+        }
+    }
+
+    private String sanitizeDownloadName(String requestedName) {
+        String name = requestedName == null ? "" : requestedName.trim();
+        name = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
+        if (name.isEmpty() || name.equals(".") || name.equals("..")) {
+            name = "gta-diagnostics-from-apk.txt";
+        }
+        if (name.length() > 120) name = name.substring(name.length() - 120);
+        return name;
+    }
+
+    private Uri persistBlobDownload(String fileName, String mimeType, byte[] bytes)
+            throws Exception {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+            values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+            values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+            values.put(MediaStore.Downloads.IS_PENDING, 1);
+
+            Uri item = getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (item == null) throw new IllegalStateException("Could not create Downloads entry");
+
+            try {
+                OutputStream stream = getContentResolver().openOutputStream(item, "w");
+                if (stream == null) throw new IllegalStateException("Could not open Downloads entry");
+                try (OutputStream output = stream) {
+                    output.write(bytes);
+                    output.flush();
+                }
+
+                ContentValues published = new ContentValues();
+                published.put(MediaStore.Downloads.IS_PENDING, 0);
+                getContentResolver().update(item, published, null, null);
+                return item;
+            } catch (Exception error) {
+                getContentResolver().delete(item, null, null);
+                throw error;
+            }
+        }
+
+        File directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (directory == null) throw new IllegalStateException("Downloads storage unavailable");
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IllegalStateException("Could not create app Downloads folder");
+        }
+        File file = new File(directory, fileName);
+        try (OutputStream output = new FileOutputStream(file)) {
+            output.write(bytes);
+            output.flush();
+        }
+        return Uri.fromFile(file);
     }
 
     private boolean isIsolationTargetUrl(String url) {
