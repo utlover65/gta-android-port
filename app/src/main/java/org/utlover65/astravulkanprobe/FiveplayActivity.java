@@ -169,9 +169,11 @@ public final class FiveplayActivity extends Activity {
             );
 
             if (!"https".equalsIgnoreCase(scheme) || !trustedHost) {
+                Log.w(TAG, "Blocked download URL: " + url);
+                String rejectedHost = host == null ? "(no host)" : host;
                 Toast.makeText(
                         FiveplayActivity.this,
-                        "Blocked download from an untrusted URL",
+                        "Blocked download host: " + rejectedHost,
                         Toast.LENGTH_LONG
                 ).show();
                 return;
