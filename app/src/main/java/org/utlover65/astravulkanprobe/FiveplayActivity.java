@@ -849,6 +849,10 @@ public final class FiveplayActivity extends Activity {
                         "isolate-and-require-corp");
             }
 
+            // Supply standard cross-origin isolation headers to the main HTML response.
+            responseHeaders.put("Cross-Origin-Opener-Policy", "same-origin");
+            responseHeaders.put("Cross-Origin-Embedder-Policy", "require-corp");
+
             responseHeaders.put("Content-Length", Integer.toString(body.length));
 
             String mimeType = contentType.split(";", 2)[0].trim();
